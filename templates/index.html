@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>RcloneGUI</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0d0f14; --surface:#13161e; --surface2:#1a1e2a; --border:#252a38;
+  --accent:#4fffb0; --accent2:#7c6aff; --accent3:#ff6a6a; --accent4:#ffc96a;
+  --text:#e8ecf4; --muted:#6b7490; --dim:#3a4058;
+  --mono:'JetBrains Mono',monospace; --sans:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;height:100vh;overflow:hidden;}
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:220px 1fr;grid-template-rows:52px 1fr;height:100vh;}
+/* TOPBAR */
+.topbar{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px;}
+.logo{font-family:var(--sans);font-weight:800;font-size:18px;color:var(--accent);display:flex;align-items:center;gap:8px;}
+.logo-icon{width:28px;height:28px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--bg);font-size:14px;font-weight:800;}
+.topbar-status{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);}
+.dot.ok{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+.dot.err{background:var(--accent3);}
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.sidebar-section{padding:12px;border-bottom:1px solid var(--border);}
+.sidebar-section.grow{flex:1;overflow-y:auto;}
+.s-label{font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:8px;padding:0 4px;}
+.nav-item,.remote-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;color:var(--muted);transition:all .15s;font-size:12px;border:1px solid transparent;}
+.nav-item:hover,.remote-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.active{color:var(--accent2);background:rgba(124,106,255,.1);}
+.remote-item.active{background:rgba(79,255,176,.08);color:var(--accent);border-color:rgba(79,255,176,.2);}
+.remote-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+/* MAIN */
+.main{display:flex;flex-direction:column;overflow:hidden;}
+.view{display:none;flex-direction:column;flex:1;overflow:hidden;}
+.view.active{display:flex;}
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.breadcrumb{display:flex;align-items:center;gap:4px;flex:1;overflow:hidden;min-width:0;}
+.bc-part{color:var(--muted);cursor:pointer;font-size:12px;white-space:nowrap;transition:color .1s;}
+.bc-part:hover{color:var(--accent);}
+.bc-part.cur{color:var(--text);}
+.bc-sep{color:var(--dim);}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--mono);font-size:11px;transition:all .15s;white-space:nowrap;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:500;}
+.btn.primary:hover{background:#3de8a0;}
+.btn.danger{border-color:var(--accent3);color:var(--accent3);}
+.btn.danger:hover{background:rgba(255,106,106,.1);}
+.btn.icon{padding:6px;min-width:30px;justify-content:center;}
+/* FILE LIST */
+.file-area{flex:1;overflow:auto;}
+.file-header{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);z-index:10;}
+.file-header-row{display:flex;padding:8px 14px;gap:10px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);}
+.frow{display:flex;align-items:center;padding:8px 14px;gap:10px;cursor:pointer;border-bottom:1px solid rgba(37,42,56,.5);transition:background .1s;}
+.frow:hover{background:var(--surface2);}
+.frow.sel{background:rgba(79,255,176,.05);outline:1px solid rgba(79,255,176,.15);}
+.f-icon{width:24px;flex-shrink:0;font-size:16px;text-align:center;}
+.f-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;}
+.f-size{width:80px;flex-shrink:0;text-align:right;font-size:11px;color:var(--muted);}
+.f-date{width:130px;flex-shrink:0;font-size:11px;color:var(--muted);}
+.f-actions{width:110px;flex-shrink:0;display:flex;gap:4px;justify-content:flex-end;opacity:0;transition:opacity .1s;}
+.frow:hover .f-actions{opacity:1;}
+.mbtn{padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:10px;font-family:var(--mono);transition:all .1s;}
+.mbtn:hover{border-color:var(--accent);color:var(--accent);}
+.mbtn.del:hover{border-color:var(--accent3);color:var(--accent3);}
+/* EMPTY / LOADING */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--dim);gap:12px;}
+.empty-icon{font-size:40px;opacity:.3;}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--dim);gap:10px;}
+.spinner{width:14px;height:14px;border:2px solid rgba(79,255,176,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+/* TRANSFER */
+.transfer-form{padding:24px;display:flex;flex-direction:column;gap:16px;max-width:680px;overflow:auto;}
+.form-row{display:flex;flex-direction:column;gap:6px;}
+.f-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);}
+.f-input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:var(--mono);font-size:12px;transition:border-color .15s;outline:none;}
+.f-input:focus{border-color:var(--accent2);}
+select.f-input{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7490' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;}
+.path-row{display:flex;gap:6px;}
+.path-row .f-input{flex:1;}
+.op-tabs{display:flex;gap:4px;}
+.op-tab{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:11px;transition:all .15s;}
+.op-tab.active{background:rgba(124,106,255,.15);border-color:var(--accent2);color:var(--accent2);}
+.job-log{overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;line-height:1.6;max-height:240px;}
+.log-line{color:var(--muted);}
+.log-line.ok{color:var(--accent);}
+.log-line.err{color:var(--accent3);}
+.log-line.prog{color:var(--accent4);}
+.jstatus{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:6px;font-size:11px;margin-top:4px;}
+.jstatus.running{background:rgba(79,255,176,.05);border:1px solid rgba(79,255,176,.2);color:var(--accent);}
+.jstatus.done{background:rgba(79,255,176,.08);border:1px solid rgba(79,255,176,.3);color:var(--accent);}
+.jstatus.error{background:rgba(255,106,106,.06);border:1px solid rgba(255,106,106,.2);color:var(--accent3);}
+.jstatus.cancelled{background:rgba(255,201,106,.06);border:1px solid rgba(255,201,106,.2);color:var(--accent4);}
+/* JOBS */
+.jobs-list{padding:16px;display:flex;flex-direction:column;gap:8px;overflow:auto;flex:1;}
+.job-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+.job-cmd{font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.badge{font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:4px;font-weight:500;flex-shrink:0;}
+.badge.running{background:rgba(79,255,176,.15);color:var(--accent);}
+.badge.done{background:rgba(79,255,176,.1);color:var(--accent);}
+.badge.error{background:rgba(255,106,106,.12);color:var(--accent3);}
+.badge.cancelled{background:rgba(255,201,106,.1);color:var(--accent4);}
+.job-elapsed{font-size:10px;color:var(--dim);flex-shrink:0;}
+/* CONFIG */
+.config-view{padding:20px;display:flex;flex-direction:column;gap:12px;overflow:auto;flex:1;}
+.remote-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.rc-icon{font-size:24px;}
+.rc-info{flex:1;}
+.rc-name{font-size:14px;color:var(--text);margin-bottom:3px;}
+.rc-path{font-size:11px;color:var(--muted);}
+/* MODALS */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px;max-height:85vh;overflow:auto;}
+.modal-title{font-family:var(--sans);font-size:16px;font-weight:700;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:4px;}
+/* CONTEXT MENU */
+.ctx-menu{position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px;z-index:500;display:none;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.ctx-menu.open{display:block;}
+.ctx-item{padding:7px 12px;cursor:pointer;border-radius:5px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;transition:all .1s;}
+.ctx-item:hover{background:var(--surface2);color:var(--text);}
+.ctx-item.danger:hover{background:rgba(255,106,106,.1);color:var(--accent3);}
+.ctx-sep{height:1px;background:var(--border);margin:4px 0;}
+/* NOTIFICATION */
+.notif{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:10px;z-index:9999;transform:translateY(80px);opacity:0;transition:all .3s;max-width:340px;}
+.notif.show{transform:translateY(0);opacity:1;}
+.notif.success{border-color:rgba(79,255,176,.4);}
+.notif.error{border-color:rgba(255,106,106,.4);}
+/* UPLOAD DROPZONE */
+.dropzone{border:2px dashed var(--border);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;color:var(--muted);}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent);background:rgba(79,255,176,.04);}
+.about-box{padding:12px 14px;background:rgba(255,201,106,.05);border:1px solid rgba(255,201,106,.2);border-radius:8px;font-size:11px;color:var(--accent4);line-height:1.7;}
+/* SCROLLBAR */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo"><div class="logo-icon">R</div>RcloneGUI</div>
+  <div class="topbar-status">
+    <div class="dot" id="rcloneDot"></div>
+    <span id="rcloneVersion">Vérification...</span>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-section">
+    <div class="s-label">Navigation</div>
+    <div class="nav-item active" data-view="browser" onclick="showView('browser')"><span>📂</span>Explorateur</div>
+    <div class="nav-item" data-view="transfer" onclick="showView('transfer')"><span>⇄</span>Transferts</div>
+    <div class="nav-item" data-view="jobs" onclick="showView('jobs')"><span>⏱</span>Jobs <span id="jobsBadge" style="display:none;margin-left:auto;background:var(--accent2);color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;"></span></div>
+    <div class="nav-item" data-view="config" onclick="showView('config')"><span>⚙</span>Remotes</div>
+  </div>
+  <div class="sidebar-section grow">
+    <div class="s-label">Remotes</div>
+    <div id="remoteList"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- BROWSER -->
+  <div class="view active" id="view-browser">
+    <div class="toolbar">
+      <div class="breadcrumb" id="breadcrumb"><span style="color:var(--dim)">Sélectionnez un remote</span></div>
+      <button class="btn icon" onclick="refreshBrowser()" title="Actualiser">↺</button>
+      <button class="btn icon" onclick="openMkdir()" title="Nouveau dossier">📁+</button>
+      <button class="btn icon" onclick="goUp()" title="Dossier parent">↑</button>
+      <button class="btn primary" id="uploadBtn" style="display:none;" onclick="openUpload()">⬆ Upload</button>
+    </div>
+    <div class="file-area" id="fileArea">
+      <div class="empty"><div class="empty-icon">☁</div><div>Choisissez un remote</div></div>
+    </div>
+  </div>
+
+  <!-- TRANSFER -->
+  <div class="view" id="view-transfer">
+    <div class="transfer-form">
+      <div style="font-family:var(--sans);font-size:18px;font-weight:700;">Transférer des fichiers</div>
+      <div class="form-row">
+        <div class="f-label">Opération</div>
+        <div class="op-tabs">
+          <button class="op-tab active" onclick="setOp('copy',this)">copy</button>
+          <button class="op-tab" onclick="setOp('sync',this)">sync</button>
+          <button class="op-tab" onclick="setOp('move',this)">move</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="f-label">Source</div>
+        <div class="path-row">
+          <input class="f-input" id="tSrc" placeholder="remote:chemin/source">
+          <button class="btn" onclick="pickPath('tSrc')">Parcourir</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="f-label">Destination</div>
+        <div class="path-row">
+          <input class="f-input" id="tDst" placeholder="remote:chemin/dest">
+          <button class="btn" onclick="pickPath('tDst')">Parcourir</button>
+        </div>
+      </div>
+      <button class="btn primary" onclick="startTransfer()">▶ Démarrer</button>
+      <div id="jobStatusBox" style="display:none;"></div>
+      <div class="job-log" id="jobLog" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- JOBS -->
+  <div class="view" id="view-jobs">
+    <div class="toolbar">
+      <span style="font-family:var(--sans);font-weight:700;">Jobs</span>
+      <button class="btn icon" onclick="loadJobs()">↺</button>
+    </div>
+    <div class="jobs-list" id="jobsList">
+      <div class="empty"><div class="empty-icon">⏱</div><div>Aucun job</div></div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="view" id="view-config">
+    <div class="toolbar">
+      <span style="font-family:var(--sans);font-weight:700;">Remotes</span>
+      <button class="btn primary" onclick="openAddRemote()">+ Ajouter</button>
+    </div>
+    <div class="config-view" id="configView">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" id="ctxOpenItem" onclick="ctxOpen()">📂 Ouvrir</div>
+  <div class="ctx-item" id="ctxDownloadItem" onclick="ctxDownload()">⬇ Télécharger</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxSetSrc()">→ Source transfert</div>
+  <div class="ctx-item" onclick="ctxSetDst()">→ Destination transfert</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="ctxDelete()">🗑 Supprimer</div>
+</div>
+
+<!-- MODAL MKDIR -->
+<div class="modal-overlay" id="mkdirModal">
+  <div class="modal" style="width:380px;">
+    <div class="modal-title">Nouveau dossier</div>
+    <div class="form-row">
+      <div class="f-label">Nom</div>
+      <input class="f-input" id="mkdirName" placeholder="mon-dossier">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('mkdirModal')">Annuler</button>
+      <button class="btn primary" onclick="doMkdir()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL UPLOAD -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal" style="width:500px;">
+    <div class="modal-title">⬆ Upload vers <span id="uploadDest" style="color:var(--accent);font-size:13px;"></span></div>
+    <div class="dropzone" id="uploadDz"
+      onclick="document.getElementById('uploadFileInput').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="handleDrop(event)">
+      <div style="font-size:32px;margin-bottom:10px;">📂</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px;">Glisser-déposer des fichiers ici</div>
+      <div style="font-size:11px;">ou cliquer pour sélectionner</div>
+    </div>
+    <input type="file" id="uploadFileInput" multiple style="display:none;" onchange="previewFiles(this.files)">
+    <div id="uploadPreview" style="display:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;"></div>
+    <div id="uploadProgressBox" style="display:none;"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('uploadModal')">Fermer</button>
+      <button class="btn primary" id="uploadSendBtn" style="display:none;" onclick="doUpload()">⬆ Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ADD REMOTE -->
+<div class="modal-overlay" id="addRemoteModal">
+  <div class="modal" style="width:460px;">
+    <div class="modal-title">Ajouter un remote</div>
+    <div class="form-row">
+      <div class="f-label">Nom</div>
+      <input class="f-input" id="newRemoteName" placeholder="mon-cloud">
+    </div>
+    <div class="form-row">
+      <div class="f-label">Type</div>
+      <select class="f-input" id="newRemoteType" onchange="updateRemoteFields()">
+        <option value="s3">Amazon S3 / Scaleway / Compatible</option>
+        <option value="drive">Google Drive</option>
+        <option value="onedrive">OneDrive</option>
+        <option value="dropbox">Dropbox</option>
+        <option value="b2">Backblaze B2</option>
+        <option value="sftp">SFTP</option>
+        <option value="ftp">FTP</option>
+        <option value="webdav">WebDAV</option>
+        <option value="mega">Mega</option>
+        <option value="box">Box</option>
+      </select>
+    </div>
+    <div id="remoteExtraFields"></div>
+    <div class="about-box">⚠️ Pour les services OAuth (Drive, OneDrive, Dropbox…), rclone ouvrira un navigateur pour l'authentification.</div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('addRemoteModal')">Annuler</button>
+      <button class="btn primary" onclick="doAddRemote()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PATH PICKER -->
+<div class="modal-overlay" id="pathPickerModal">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title">Sélectionner un chemin</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;" id="ppPath">/</div>
+    <div style="border:1px solid var(--border);border-radius:8px;max-height:300px;overflow:auto;" id="ppList">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('pathPickerModal')">Annuler</button>
+      <button class="btn primary" onclick="ppConfirm()">Sélectionner</button>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// ===== STATE =====
+var currentPath = '';
+var currentRemote = '';
+var currentOp = 'copy';
+var selectedFile = null;
+var ctxTarget = null;
+var fileList = [];
+var jobPollInterval = null;
+var ppTargetInput = null;
+var ppCurrentPath = '';
+var pendingFiles = null;
+
+// ===== INIT =====
+async function init() {
+  await checkRclone();
+  await loadRemotes();
+  loadConfig();
+  setInterval(loadJobs, 3000);
+}
+
+async function checkRclone() {
+  var r = await api('/api/check_rclone');
+  var dot = document.getElementById('rcloneDot');
+  var ver = document.getElementById('rcloneVersion');
+  if (r.installed) {
+    dot.className = 'dot ok';
+    ver.textContent = r.version;
+  } else {
+    dot.className = 'dot err';
+    ver.textContent = 'rclone non trouvé';
+    notify('rclone introuvable ! sudo apt install rclone', 'error');
+  }
+}
+
+async function loadRemotes() {
+  var r = await api('/api/remotes');
+  var list = document.getElementById('remoteList');
+  if (!r.remotes || r.remotes.length === 0) {
+    list.innerHTML = '<div style="padding:10px;color:var(--dim);font-size:11px;">Aucun remote</div>';
+    return;
+  }
+  list.innerHTML = r.remotes.map(function(rem) {
+    return '<div class="remote-item" onclick="browseRemote(\'' + esc(rem) + '\')" data-remote="' + esc(rem) + '">' +
+      '<span>' + remoteIcon(rem) + '</span>' +
+      '<span class="remote-name">' + esc(rem.replace(':','')) + '</span>' +
+      '</div>';
+  }).join('');
+}
+
+function remoteIcon(n) {
+  n = n.toLowerCase();
+  if (n.includes('drive') || n.includes('gdrive')) return '🟢';
+  if (n.includes('s3') || n.includes('aws') || n.includes('scaleway')) return '🟠';
+  if (n.includes('onedrive')) return '🔵';
+  if (n.includes('dropbox')) return '🔷';
+  if (n.includes('b2') || n.includes('backblaze')) return '🔴';
+  if (n.includes('sftp') || n.includes('ftp')) return '🖥';
+  if (n.includes('mega')) return '🟣';
+  return '☁';
+}
+
+// ===== BROWSER =====
+async function browseRemote(remote) {
+  currentRemote = remote;
+  currentPath = remote;
+  document.querySelectorAll('.remote-item').forEach(function(el) { el.classList.remove('active'); });
+  var el = document.querySelector('[data-remote="' + remote + '"]');
+  if (el) el.classList.add('active');
+  document.getElementById('uploadBtn').style.display = 'inline-flex';
+  showView('browser');
+  await loadFiles(remote);
+}
+
+async function loadFiles(path) {
+  var area = document.getElementById('fileArea');
+  area.innerHTML = '<div class="loading"><div class="spinner"></div> Chargement...</div>';
+  updateBreadcrumb(path);
+  var r = await api('/api/ls?path=' + encodeURIComponent(path));
+  if (r.error) {
+    area.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div><div style="color:var(--accent3)">' + esc(r.error) + '</div></div>';
+    return;
+  }
+  if (!r.files || r.files.length === 0) {
+    area.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>Dossier vide</div></div>';
+    return;
+  }
+  var sorted = r.files.slice().sort(function(a,b) {
+    if (a.IsDir && !b.IsDir) return -1;
+    if (!a.IsDir && b.IsDir) return 1;
+    return (a.Name||'').localeCompare(b.Name||'');
+  });
+  fileList = sorted.map(function(f) {
+    var name = f.Name || f.Path || '';
+    var fp = path.endsWith(':') ? path + name : path + '/' + name;
+    return { f: f, name: name, fullPath: fp, isDir: f.IsDir, basePath: path };
+  });
+  var html = '<div class="file-header"><div class="file-header-row">' +
+    '<div style="width:24px;flex-shrink:0;"></div>' +
+    '<div style="flex:1;">Nom</div>' +
+    '<div style="width:80px;flex-shrink:0;text-align:right;">Taille</div>' +
+    '<div style="width:130px;flex-shrink:0;">Modifié</div>' +
+    '<div style="width:110px;flex-shrink:0;"></div>' +
+    '</div></div><div id="fileBody">';
+  fileList.forEach(function(item, i) {
+    var icon = item.isDir ? '📁' : fileIcon(item.name);
+    var nameColor = item.isDir ? 'var(--accent2)' : 'var(--text)';
+    var sizeStr = item.isDir ? '—' : fmtSize(item.f.Size);
+    var dateStr = fmtDate(item.f.ModTime);
+    var openBtn = item.isDir ? '<button class="mbtn" onclick="event.stopPropagation();navigateTo(fileList[' + i + '].fullPath)">ouvrir</button>' : '';
+    html += '<div class="frow" onclick="selectRow(this,' + i + ')" ondblclick="dblRow(' + i + ')" oncontextmenu="showCtx(event,' + i + ')">' +
+      '<div class="f-icon">' + icon + '</div>' +
+      '<div class="f-name" style="color:' + nameColor + ';">' + esc(item.name) + '</div>' +
+      '<div class="f-size">' + sizeStr + '</div>' +
+      '<div class="f-date">' + dateStr + '</div>' +
+      '<div class="f-actions">' + openBtn +
+        '<button class="mbtn" onclick="event.stopPropagation();setTransferPath(\'tSrc\',fileList[' + i + '].fullPath)">src</button>' +
+        '<button class="mbtn del" onclick="event.stopPropagation();deleteItem(fileList[' + i + '].fullPath,fileList[' + i + '].isDir)">✕</button>' +
+      '</div>' +
+      '</div>';
+  });
+  html += '</div>';
+  area.innerHTML = html;
+}
+
+function selectRow(el, i) {
+  document.querySelectorAll('.frow').forEach(function(r) { r.classList.remove('sel'); });
+  el.classList.add('sel');
+  selectedFile = fileList[i];
+}
+
+function dblRow(i) {
+  var item = fileList[i];
+  if (item && item.isDir) navigateTo(item.fullPath);
+}
+
+function showCtx(event, i) {
+  event.preventDefault();
+  var item = fileList[i];
+  if (!item) return;
+  ctxTarget = item;
+  document.getElementById('ctxOpenItem').style.display = item.isDir ? 'flex' : 'none';
+  document.getElementById('ctxDownloadItem').style.display = item.isDir ? 'none' : 'flex';
+  var menu = document.getElementById('ctxMenu');
+  menu.style.left = event.clientX + 'px';
+  menu.style.top = event.clientY + 'px';
+  menu.classList.add('open');
+}
+
+function ctxOpen() { if (ctxTarget && ctxTarget.isDir) navigateTo(ctxTarget.fullPath); closeCtx(); }
+function ctxSetSrc() { if (ctxTarget) setTransferPath('tSrc', ctxTarget.fullPath); closeCtx(); }
+function ctxSetDst() { if (ctxTarget) setTransferPath('tDst', ctxTarget.fullPath); closeCtx(); }
+
+function ctxDownload() {
+  if (!ctxTarget || ctxTarget.isDir) { closeCtx(); return; }
+  notify('⬇ Téléchargement de ' + ctxTarget.name + '...', 'success');
+  var a = document.createElement('a');
+  a.href = '/api/download?path=' + encodeURIComponent(ctxTarget.fullPath);
+  a.download = ctxTarget.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  closeCtx();
+}
+
+async function ctxDelete() {
+  if (!ctxTarget) return;
+  await deleteItem(ctxTarget.fullPath, ctxTarget.isDir);
+  closeCtx();
+}
+
+function closeCtx() { document.getElementById('ctxMenu').classList.remove('open'); }
+
+function navigateTo(path) { currentPath = path; loadFiles(path); }
+
+function goUp() {
+  if (!currentPath) return;
+  var ci = currentPath.indexOf(':');
+  var after = currentPath.slice(ci + 1).split('/').filter(Boolean);
+  if (after.length === 0) return;
+  after.pop();
+  navigateTo(currentPath.slice(0, ci + 1) + after.join('/'));
+}
+
+function refreshBrowser() { if (currentPath) loadFiles(currentPath); }
+
+function updateBreadcrumb(path) {
+  var ci = path.indexOf(':');
+  var remote = path.slice(0, ci + 1);
+  var parts = path.slice(ci + 1).split('/').filter(Boolean);
+  var html = '<span class="bc-part" onclick="navigateTo(\'' + esc(remote) + '\')">' + esc(remote) + '</span>';
+  var built = remote;
+  parts.forEach(function(p, i) {
+    built += (built.endsWith(':') ? '' : '/') + p;
+    var cur = i === parts.length - 1;
+    var b2 = built;
+    html += '<span class="bc-sep">/</span><span class="bc-part' + (cur ? ' cur' : '') + '" onclick="navigateTo(\'' + esc(b2) + '\')">' + esc(p) + '</span>';
+  });
+  document.getElementById('breadcrumb').innerHTML = html;
+}
+
+async function deleteItem(path, isDir) {
+  if (!confirm('Supprimer "' + path + '" ?')) return;
+  var r = await api('/api/delete', 'POST', { path: path, is_dir: isDir });
+  if (r.success) { notify('Supprimé', 'success'); refreshBrowser(); }
+  else notify(r.stderr || 'Erreur', 'error');
+}
+
+function openMkdir() {
+  if (!currentPath) { notify('Sélectionnez un dossier d\'abord', 'error'); return; }
+  document.getElementById('mkdirName').value = '';
+  openModal('mkdirModal');
+}
+
+async function doMkdir() {
+  var name = document.getElementById('mkdirName').value.trim();
+  if (!name) return;
+  var path = currentPath.endsWith(':') ? currentPath + name : currentPath + '/' + name;
+  var r = await api('/api/mkdir', 'POST', { path: path });
+  if (r.success) { notify('Dossier créé', 'success'); closeModal('mkdirModal'); refreshBrowser(); }
+  else notify(r.stderr || 'Erreur', 'error');
+}
+
+// ===== UPLOAD =====
+function openUpload() {
+  if (!currentPath) { notify('Naviguez dans un dossier d\'abord', 'error'); return; }
+  document.getElementById('uploadDest').textContent = currentPath;
+  document.getElementById('uploadPreview').style.display = 'none';
+  document.getElementById('uploadPreview').innerHTML = '';
+  document.getElementById('uploadProgressBox').style.display = 'none';
+  document.getElementById('uploadProgressBox').innerHTML = '';
+  document.getElementById('uploadSendBtn').style.display = 'none';
+  document.getElementById('uploadDz').style.display = 'block';
+  document.getElementById('uploadFileInput').value = '';
+  pendingFiles = null;
+  openModal('uploadModal');
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById('uploadDz').classList.remove('drag');
+  if (event.dataTransfer.files.length) previewFiles(event.dataTransfer.files);
+}
+
+function previewFiles(files) {
+  pendingFiles = files;
+  var prev = document.getElementById('uploadPreview');
+  prev.style.display = 'block';
+  prev.innerHTML = Array.from(files).map(function(f) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);">' +
+      '<span>' + fileIcon(f.name) + '</span>' +
+      '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name) + '</span>' +
+      '<span style="font-size:11px;color:var(--muted);flex-shrink:0;">' + fmtSize(f.size) + '</span>' +
+      '</div>';
+  }).join('');
+  document.getElementById('uploadSendBtn').style.display = 'inline-flex';
+}
+
+async function doUpload() {
+  if (!pendingFiles || !pendingFiles.length) return;
+  var prog = document.getElementById('uploadProgressBox');
+  prog.style.display = 'block';
+  document.getElementById('uploadSendBtn').style.display = 'none';
+  document.getElementById('uploadDz').style.display = 'none';
+
+  var total = pendingFiles.length;
+  var errors = [];
+
+  for (var i = 0; i < total; i++) {
+    var file = pendingFiles[i];
+    prog.innerHTML = '<div style="margin-bottom:8px;font-size:12px;color:var(--muted);">Envoi de <span style="color:var(--text);">' + esc(file.name) + '</span> (' + (i+1) + '/' + total + ')</div>' +
+      '<div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden;">' +
+      '<div style="background:var(--accent);height:100%;width:' + Math.round((i/total)*100) + '%;transition:width .3s;"></div></div>';
+    var fd = new FormData();
+    fd.append('path', currentPath);
+    fd.append('files', file);
+    try {
+      var resp = await fetch('/api/upload', { method: 'POST', body: fd });
+      var result = await resp.json();
+      if (!result.success) errors.push(file.name + ': ' + ((result.results && result.results[0] && result.results[0].error) || 'Erreur'));
+    } catch(e) {
+      errors.push(file.name + ': ' + e.message);
+    }
+  }
+
+  if (errors.length === 0) {
+    prog.innerHTML = '<div class="jstatus done">✅ ' + total + ' fichier(s) uploadé(s) avec succès</div>';
+    notify(total + ' fichier(s) uploadé(s)', 'success');
+    setTimeout(function() { closeModal('uploadModal'); refreshBrowser(); }, 1500);
+  } else {
+    prog.innerHTML = '<div class="jstatus error">❌ ' + errors.length + ' erreur(s)</div>' +
+      errors.map(function(e) { return '<div style="font-size:11px;color:var(--accent3);padding:2px 0;">' + esc(e) + '</div>'; }).join('');
+    notify(errors.length + ' erreur(s)', 'error');
+    refreshBrowser();
+  }
+}
+
+// ===== TRANSFER =====
+function setOp(op, btn) {
+  currentOp = op;
+  document.querySelectorAll('.op-tab').forEach(function(t) { t.classList.remove('active'); });
+  btn.classList.add('active');
+}
+
+function setTransferPath(inputId, path) {
+  document.getElementById(inputId).value = path;
+  showView('transfer');
+  notify('Chemin défini comme ' + (inputId === 'tSrc' ? 'source' : 'destination'), 'success');
+}
+
+async function startTransfer() {
+  var src = document.getElementById('tSrc').value.trim();
+  var dst = document.getElementById('tDst').value.trim();
+  if (!src || !dst) { notify('Source et destination requises', 'error'); return; }
+  var r = await api('/api/' + currentOp, 'POST', { src: src, dst: dst });
+  if (r.job_id) {
+    document.getElementById('jobLog').style.display = 'block';
+    document.getElementById('jobLog').innerHTML = '';
+    document.getElementById('jobStatusBox').style.display = 'block';
+    document.getElementById('jobStatusBox').innerHTML = '<div class="jstatus running"><div class="spinner"></div> ' + currentOp + ' en cours...</div>';
+    startJobPoll(r.job_id);
+  } else {
+    notify(r.error || 'Erreur', 'error');
+  }
+}
+
+function startJobPoll(jobId) {
+  if (jobPollInterval) clearInterval(jobPollInterval);
+  jobPollInterval = setInterval(async function() {
+    var r = await api('/api/job/' + jobId);
+    if (r.error) return;
+    var log = document.getElementById('jobLog');
+    var sb = document.getElementById('jobStatusBox');
+    var lines = r.output && r.output.length ? r.output : (r.status === 'running' ? ['⏳ Transfert en cours... ' + r.elapsed + 's'] : []);
+    log.innerHTML = lines.map(function(line) {
+      var cls = 'log-line';
+      if (line.includes('✅') || line.includes('✓') || line.includes('Transferred')) cls += ' ok';
+      else if (line.includes('❌') || line.includes('ERROR')) cls += ' err';
+      else if (line.includes('%') || line.includes('⏳')) cls += ' prog';
+      return '<div class="' + cls + '">' + esc(line) + '</div>';
+    }).join('');
+    log.scrollTop = log.scrollHeight;
+    if (r.status === 'running') {
+      sb.innerHTML = '<div class="jstatus running"><div class="spinner"></div> ' + currentOp + ' — ' + r.elapsed + 's</div>';
+    } else if (r.status === 'done') {
+      sb.innerHTML = '<div class="jstatus done">✅ Terminé en ' + r.elapsed + 's</div>';
+      clearInterval(jobPollInterval);
+      loadJobs(); refreshBrowser();
+    } else if (r.status === 'error') {
+      sb.innerHTML = '<div class="jstatus error">❌ Erreur après ' + r.elapsed + 's</div>';
+      clearInterval(jobPollInterval); loadJobs();
+    } else if (r.status === 'cancelled') {
+      sb.innerHTML = '<div class="jstatus cancelled">⊘ Annulé</div>';
+      clearInterval(jobPollInterval);
+    }
+  }, 1000);
+}
+
+// ===== PATH PICKER =====
+function pickPath(inputId) {
+  ppTargetInput = inputId;
+  ppCurrentPath = '';
+  openModal('pathPickerModal');
+  ppLoadRemotes();
+}
+
+async function ppLoadRemotes() {
+  document.getElementById('ppPath').textContent = '/';
+  var list = document.getElementById('ppList');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  var r = await api('/api/remotes');
+  if (!r.remotes || !r.remotes.length) { list.innerHTML = '<div class="empty">Aucun remote</div>'; return; }
+  list.innerHTML = r.remotes.map(function(rem) {
+    return '<div class="frow" onclick="ppNav(\'' + esc(rem) + '\')">' +
+      '<div class="f-icon">' + remoteIcon(rem) + '</div>' +
+      '<div class="f-name">' + esc(rem) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+async function ppNav(path) {
+  ppCurrentPath = path;
+  document.getElementById('ppPath').textContent = path;
+  var list = document.getElementById('ppList');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  var ci = path.indexOf(':');
+  var after = path.slice(ci+1).split('/').filter(Boolean);
+  var backPath = after.length > 0 ? (function() { var p = after.slice(0,-1); return path.slice(0,ci+1) + p.join('/'); })() : '';
+  var backBtn = backPath !== undefined && (after.length > 0) ?
+    '<div class="frow" onclick="ppNav(\'' + esc(backPath || path.slice(0,ci+1)) + '\')">' +
+    '<div class="f-icon">↑</div><div class="f-name" style="color:var(--muted)">..</div></div>' : '';
+  var r = await api('/api/ls?path=' + encodeURIComponent(path));
+  var dirs = (r.files || []).filter(function(f) { return f.IsDir; });
+  if (!dirs.length) { list.innerHTML = backBtn + '<div style="padding:20px;color:var(--dim);font-size:12px;">Pas de sous-dossiers</div>'; return; }
+  list.innerHTML = backBtn + dirs.map(function(f) {
+    var fp = path.endsWith(':') ? path + f.Name : path + '/' + f.Name;
+    return '<div class="frow" onclick="ppNav(\'' + esc(fp) + '\')">' +
+      '<div class="f-icon">📁</div><div class="f-name" style="color:var(--accent2);">' + esc(f.Name) + '</div></div>';
+  }).join('');
+}
+
+function ppConfirm() {
+  if (ppTargetInput && ppCurrentPath) document.getElementById(ppTargetInput).value = ppCurrentPath;
+  closeModal('pathPickerModal');
+}
+
+// ===== JOBS =====
+async function loadJobs() {
+  var r = await api('/api/jobs');
+  var list = document.getElementById('jobsList');
+  var badge = document.getElementById('jobsBadge');
+  var ids = Object.keys(r);
+  var running = ids.filter(function(id) { return r[id].status === 'running'; });
+  badge.style.display = running.length ? 'inline' : 'none';
+  badge.textContent = running.length;
+  if (!ids.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">⏱</div><div>Aucun job</div></div>'; return; }
+  list.innerHTML = ids.slice().reverse().map(function(id) {
+    var j = r[id];
+    return '<div class="job-card">' +
+      '<span class="badge ' + j.status + '">' + j.status + '</span>' +
+      '<span class="job-cmd">' + esc(j.cmd) + '</span>' +
+      '<span class="job-elapsed">' + j.elapsed + 's</span>' +
+      (j.status === 'running' ? '<button class="mbtn del" onclick="cancelJob(\'' + id + '\')">Annuler</button>' : '') +
+      '</div>';
+  }).join('');
+}
+
+async function cancelJob(id) {
+  await api('/api/job/' + id + '/cancel', 'POST', {});
+  loadJobs();
+}
+
+// ===== CONFIG =====
+async function loadConfig() {
+  var view = document.getElementById('configView');
+  var r = await api('/api/remotes');
+  if (!r.remotes || !r.remotes.length) {
+    view.innerHTML = '<div class="empty"><div class="empty-icon">⚙</div><div>Aucun remote</div></div>';
+    return;
+  }
+  view.innerHTML = r.remotes.map(function(rem) {
+    return '<div class="remote-card">' +
+      '<div class="rc-icon">' + remoteIcon(rem) + '</div>' +
+      '<div class="rc-info"><div class="rc-name">' + esc(rem.replace(':','')) + '</div><div class="rc-path">' + esc(rem) + '</div></div>' +
+      '<button class="btn" onclick="browseRemote(\'' + esc(rem) + '\')">Parcourir</button>' +
+      '<button class="btn danger" onclick="deleteRemote(\'' + esc(rem.replace(':','')) + '\')">Supprimer</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function deleteRemote(name) {
+  if (!confirm('Supprimer le remote "' + name + '" ?')) return;
+  var r = await api('/api/config/delete', 'POST', { name: name });
+  if (r.success) { notify('Remote supprimé', 'success'); loadRemotes(); loadConfig(); }
+  else notify(r.stderr || 'Erreur', 'error');
+}
+
+function openAddRemote() {
+  document.getElementById('newRemoteName').value = '';
+  document.getElementById('newRemoteType').value = 's3';
+  updateRemoteFields();
+  openModal('addRemoteModal');
+}
+
+function updateRemoteFields() {
+  var type = document.getElementById('newRemoteType').value;
+  var fields = {
+    s3: [['region','Région (ex: fr-par)'],['access_key_id','Access Key ID'],['secret_access_key','Secret Access Key'],['endpoint','Endpoint (ex: s3.fr-par.scw.cloud)']],
+    sftp: [['host','Hôte'],['user','Utilisateur'],['port','Port (22)'],['key_file','Clé SSH']],
+    ftp: [['host','Hôte'],['user','Utilisateur'],['pass','Mot de passe'],['port','Port (21)']],
+    webdav: [['url','URL'],['user','Utilisateur'],['pass','Mot de passe']],
+    b2: [['account','Account ID'],['key','Application Key']],
+  };
+  var extra = fields[type] || [];
+  var container = document.getElementById('remoteExtraFields');
+  if (!extra.length) { container.innerHTML = ''; return; }
+  container.innerHTML = extra.map(function(f) {
+    return '<div class="form-row" style="margin-top:4px;"><div class="f-label">' + f[1] + '</div>' +
+      '<input class="f-input" data-key="' + f[0] + '" placeholder="' + f[1] + '"></div>';
+  }).join('');
+}
+
+async function doAddRemote() {
+  var name = document.getElementById('newRemoteName').value.trim();
+  var type = document.getElementById('newRemoteType').value;
+  if (!name) { notify('Nom requis', 'error'); return; }
+  var params = {};
+  document.querySelectorAll('#remoteExtraFields input[data-key]').forEach(function(inp) {
+    if (inp.value.trim()) params[inp.getAttribute('data-key')] = inp.value.trim();
+  });
+  var r = await api('/api/config/create', 'POST', { name: name, type: type, params: params });
+  if (r.success) { notify('Remote créé !', 'success'); closeModal('addRemoteModal'); loadRemotes(); loadConfig(); }
+  else notify(r.stderr || 'Erreur', 'error');
+}
+
+// ===== VIEWS =====
+function showView(name) {
+  document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function(n) {
+    n.classList.toggle('active', n.dataset.view === name);
+  });
+  if (name === 'jobs') loadJobs();
+  if (name === 'config') loadConfig();
+}
+
+// ===== MODALS =====
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.addEventListener('click', function(e) {
+  if (!document.getElementById('ctxMenu').contains(e.target)) closeCtx();
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeCtx();
+    document.querySelectorAll('.modal-overlay').forEach(function(m) { m.classList.remove('open'); });
+  }
+  if (e.key === 'F5') { e.preventDefault(); refreshBrowser(); }
+  if (e.key === 'Backspace' && !e.target.matches('input,textarea')) { e.preventDefault(); goUp(); }
+  if (e.key === 'Delete' && selectedFile && !e.target.matches('input,textarea')) {
+    deleteItem(selectedFile.fullPath, selectedFile.isDir);
+  }
+});
+document.querySelectorAll('.modal-overlay').forEach(function(o) {
+  o.addEventListener('click', function(e) { if (e.target === o) o.classList.remove('open'); });
+});
+
+// ===== NOTIFY =====
+function notify(msg, type) {
+  var n = document.getElementById('notif');
+  n.className = 'notif ' + (type || 'success');
+  n.innerHTML = (type === 'error' ? '✗ ' : '✓ ') + esc(msg);
+  n.classList.add('show');
+  setTimeout(function() { n.classList.remove('show'); }, 3500);
+}
+
+// ===== UTILS =====
+async function api(url, method, body) {
+  try {
+    var opts = { method: method || 'GET', headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    var r = await fetch(url, opts);
+    return await r.json();
+  } catch(e) { return { error: e.message }; }
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function fmtSize(b) {
+  if (!b) return '0 B';
+  var u = ['B','KB','MB','GB','TB'], i = 0;
+  while (b >= 1024 && i < u.length-1) { b /= 1024; i++; }
+  return b.toFixed(1) + ' ' + u[i];
+}
+
+function fmtDate(dt) {
+  if (!dt) return '';
+  try {
+    var d = new Date(dt);
+    return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return dt; }
+}
+
+function fileIcon(name) {
+  var ext = (name||'').split('.').pop().toLowerCase();
+  var m = {pdf:'📄',txt:'📝',md:'📝',jpg:'🖼',jpeg:'🖼',png:'🖼',gif:'🖼',webp:'🖼',svg:'🖼',mp4:'🎬',mkv:'🎬',avi:'🎬',mp3:'🎵',flac:'🎵',wav:'🎵',zip:'🗜',tar:'🗜',gz:'🗜',rar:'🗜',js:'📜',ts:'📜',py:'📜',sh:'📜',json:'⚙',yaml:'⚙',yml:'⚙',html:'🌐',css:'🎨',doc:'📘',docx:'📘',xls:'📗',xlsx:'📗'};
+  return m[ext] || '📄';
+}
+
+init();
+</script>
+</body>
+</html>
